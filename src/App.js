@@ -1,25 +1,72 @@
-import logo from './logo.svg';
-import './App.css';
+import React, { useState, createContext, useContext } from "react";
+import "./App.css";
+import {
+  BrowserRouter as Router,
+  Switch,
+  Route,
+  Redirect,
+} from "react-router-dom";
+import ChatApp from "./components/ChatApp/ChatApp";
+import UserCreate from "./components/UserCreate/UserCreate";
+import UserLogin from "./components/UserLogin/UserLogin";
+import { AuthService, ChatService, SocketService } from "./services";
 
-function App() {
+const authService = new AuthService();
+const chatService = new ChatService(authService.getBearerHeader);
+const socketService = new SocketService(chatService);
+
+export const UserContext = createContext();
+
+const AuthProvider = ({ children }) => {
+  const context = {
+    authService,
+    chatService,
+    socketService,
+    appSelectedChannel: {},
+    appSetChannel: (ch) => {
+      setAuthContext({ ...authContext, appSelectedChannel: ch });
+      chatService.setSelectedChannel(ch);
+    },
+  };
+
+  const [authContext, setAuthContext] = useState(context);
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <UserContext.Provider value={authContext}>{children}</UserContext.Provider>
   );
-}
+};
+
+const PrivateRoute = ({ children, ...props }) => {
+  const context = useContext(UserContext);
+
+  return (
+    <Route
+      {...props}
+      render={({ location }) =>
+        context.authService.isLoggedIn ? (
+          children
+        ) : (
+          <Redirect to={{ pathname: "/login", state: { from: location } }} />
+        )
+      }
+    />
+  );
+};
+
+const App = () => {
+  return (
+    <AuthProvider>
+      <Router>
+        <Switch>
+          <Route path="/login" component={UserLogin} />
+          <Route path="/register" component={UserCreate} />
+          <PrivateRoute>
+            <ChatApp />
+          </PrivateRoute>
+        </Switch>
+      </Router>
+    </AuthProvider>
+  );
+};
 
 export default App;
